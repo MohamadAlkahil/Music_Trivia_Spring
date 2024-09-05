@@ -58,7 +58,7 @@ public class WebSocketController {
                 userJoinMessage.put("data", Map.of(
                         "userId", userId,
                         "sessionId", sessionId,
-                        "avatar", avatar,  // Ensure this is the full URL
+                        "avatar", avatar,
                         "score", score,
                         "role", role
                 ));
@@ -274,5 +274,32 @@ public class WebSocketController {
                 "type", "NEW_QUESTION",
                 "data", question
         ));
+    }
+
+    @MessageMapping("/removeUser")
+    public void handleRemoveUser(@Payload Map<String, Object> message) {
+        String sessionId = (String) message.get("sessionId");
+        String userToRemove = (String) message.get("userToRemove");
+        String requestingUser = (String) message.get("requestingUser");
+
+        boolean removed = sessionService.removeUser(sessionId, userToRemove, requestingUser);
+        if (removed) {
+            logger.info("User {} removed from session {} by {}", userToRemove, sessionId, requestingUser);
+        } else {
+            logger.warn("Failed to remove user {} from session {} by {}", userToRemove, sessionId, requestingUser);
+        }
+    }
+
+    @MessageMapping("/creatorLeave")
+    public void handleCreatorLeave(@Payload Map<String, Object> message) {
+        String sessionId = (String) message.get("sessionId");
+        String creatorId = (String) message.get("creatorId");
+
+        try {
+            sessionService.creatorLeave(sessionId, creatorId);
+            logger.info("Creator {} left and ended session {}", creatorId, sessionId);
+        } catch (IllegalArgumentException e) {
+            logger.warn("Failed creator leave attempt for session {} by {}: {}", sessionId, creatorId, e.getMessage());
+        }
     }
 }

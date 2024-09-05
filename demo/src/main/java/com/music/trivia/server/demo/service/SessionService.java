@@ -6,6 +6,7 @@ import com.music.trivia.server.demo.model.Session;
 import com.music.trivia.server.demo.model.SessionStorage;
 import com.music.trivia.server.demo.model.User;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
@@ -17,10 +18,12 @@ public class SessionService {
     private static final Logger logger = LoggerFactory.getLogger(SessionService.class);
 
     private final SessionStorage sessionStorage;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Autowired
-    public SessionService(SessionStorage sessionStorage) {
+    public SessionService(SessionStorage sessionStorage, SimpMessagingTemplate messagingTemplate) {
         this.sessionStorage = sessionStorage;
+        this.messagingTemplate = messagingTemplate;
     }
 
     public String createEmptySession(String password) {
@@ -133,6 +136,59 @@ public class SessionService {
         } catch (IllegalArgumentException e) {
             logger.warn("Session {} not found", sessionId);
             throw e;
+        }
+    }
+
+    public boolean removeUser(String sessionId, String userId, String requestingUser) {
+        Session session = sessionStorage.getSession(sessionId);
+        if (session.isCreator(requestingUser)) {
+            session.removeUser(userId);
+            logger.info("User {} removed from session {} by creator {}", userId, sessionId, requestingUser);
+
+            // Broadcast user removal to all users in the session
+            messagingTemplate.convertAndSend("/topic/users/" + sessionId, Map.of(
+                    "type", "USER_REMOVED",
+                    "data", Map.of("userId", userId)
+            ));
+
+            // Send a direct message to the removed user
+            messagingTemplate.convertAndSendToUser(userId, "/queue/errors", Map.of(
+                    "type", "REMOVED_FROM_SESSION",
+                    "data", Map.of("sessionId", sessionId)
+            ));
+
+            return true;
+        }
+        logger.warn("Failed attempt to remove user {} from session {} by non-creator {}", userId, sessionId, requestingUser);
+        return false;
+    }
+
+    public void creatorLeave(String sessionId, String creatorId) {
+        Session session = sessionStorage.getSession(sessionId);
+        if (session.isCreator(creatorId)) {
+            // Remove all users and broadcast
+            for (String userId : session.getUsers().keySet()) {
+                if (!userId.equals(creatorId)) {
+                    session.removeUser(userId);
+                    messagingTemplate.convertAndSendToUser(userId, "/queue/errors", Map.of(
+                            "type", "SESSION_ENDED",
+                            "data", Map.of("sessionId", sessionId)
+                    ));
+                }
+            }
+
+            // Broadcast session end to all users
+            messagingTemplate.convertAndSend("/topic/users/" + sessionId, Map.of(
+                    "type", "SESSION_ENDED",
+                    "data", Map.of("sessionId", sessionId)
+            ));
+
+            // Remove the session
+            sessionStorage.removeSession(sessionId);
+            logger.info("Session {} ended by creator {}", sessionId, creatorId);
+        } else {
+            logger.warn("Non-creator {} attempted to end session {}", creatorId, sessionId);
+            throw new IllegalArgumentException("Only the creator can end the session");
         }
     }
 }
