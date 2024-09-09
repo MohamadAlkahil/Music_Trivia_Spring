@@ -81,14 +81,8 @@ public class WebSocketController {
     public void handleUserLeave(@Payload Map<String, Object> message) {
         logger.info("Received userLeave message: {}", message);
 
-        Map<String, Object> data = (Map<String, Object>) message.get("data");
-        if (data == null) {
-            logger.error("Invalid userLeave message. Data is null.");
-            return;
-        }
-
-        String sessionId = (String) data.get("sessionId");
-        String userId = (String) data.get("userId");
+        String sessionId = (String) message.get("sessionId");
+        String userId = (String) message.get("userId");
 
         if (sessionId == null || userId == null) {
             logger.error("Invalid userLeave message. SessionId or UserId is null. SessionId: {}, UserId: {}", sessionId, userId);
@@ -97,14 +91,14 @@ public class WebSocketController {
 
         boolean removed = sessionService.leaveUser(sessionId, userId);
 
-        Map<String, Object> leaveMessage = new HashMap<>();
-        leaveMessage.put("type", "USER_LEAVE");
-        leaveMessage.put("data", Map.of("userId", userId));
-
-        logger.info("Broadcasting USER_LEAVE message: {}", leaveMessage);
-        messagingTemplate.convertAndSend("/topic/users/" + sessionId, leaveMessage);
-
         if (removed) {
+            // Broadcast user leave message
+            Map<String, Object> leaveMessage = new HashMap<>();
+            leaveMessage.put("type", "USER_LEAVE");
+            leaveMessage.put("data", Map.of("userId", userId));
+            messagingTemplate.convertAndSend("/topic/users/" + sessionId, leaveMessage);
+
+            // Send updated user list
             try {
                 Session session = sessionService.getSession(sessionId);
                 Map<String, User> users = session.getUsers();
