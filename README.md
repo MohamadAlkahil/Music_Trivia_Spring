@@ -8,10 +8,6 @@ This project is a real-time multiplayer Music Trivia game built with a Spring Bo
 
 link here
 
-## Architecture
-![GitHub Logo](https://github.com/MohamadAlkahil/Music_Trivia_Spring/blob/main/architecture%20diagram.png)
-
-
 ## Key Features
 
 1. **Real-time Multiplayer**: Users can create or join game sessions and play together in real-time.
@@ -20,6 +16,9 @@ link here
 4. **Responsive Design**: The frontend is built with React and features a responsive design for various screen sizes.
 5. **RESTful API**: The backend provides a RESTful API for session management and game operations.
 6. **External API Integration**: Trivia questions are fetched from an external API (OpenTrivia DB).
+
+## Architecture
+![GitHub Logo](https://github.com/MohamadAlkahil/Music_Trivia_Spring/blob/main/architecture%20diagram.png)
 
 ## Technologies Used
 
