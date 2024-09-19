@@ -24,7 +24,6 @@ public class WebSocketAuthorizationHandler implements ChannelInterceptor {
 
     private static final Logger logger = LoggerFactory.getLogger(WebSocketAuthorizationHandler.class);
 
-
     @Autowired
     public WebSocketAuthorizationHandler(JwtService jwtService, @Lazy SessionService sessionService) {
         this.jwtService = jwtService;
@@ -44,6 +43,8 @@ public class WebSocketAuthorizationHandler implements ChannelInterceptor {
                 String userID = jwtService.extractUsername(token);
                 String sessionId = jwtService.extractSessionId(token);
 
+                logger.debug("Extracted userID: {} and sessionId: {} from token", userID, sessionId);
+
                 if (userID != null && sessionId != null && jwtService.isTokenValid(token, userID, sessionId) &&
                         sessionService.isUserInSession(sessionId, userID)) {
                     UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(userID, null, null);
@@ -53,6 +54,8 @@ public class WebSocketAuthorizationHandler implements ChannelInterceptor {
                 } else {
                     logger.warn("Invalid token or user not in session. User: {}, Session: {}", userID, sessionId);
                 }
+            } else {
+                logger.warn("No valid Authorization header found in WebSocket connection request");
             }
         }
 
