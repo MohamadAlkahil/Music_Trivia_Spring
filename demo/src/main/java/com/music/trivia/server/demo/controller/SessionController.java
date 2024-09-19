@@ -4,94 +4,99 @@ import com.music.trivia.server.demo.exception.UserAlreadyExistsException;
 import com.music.trivia.server.demo.exception.UserNotFoundException;
 import com.music.trivia.server.demo.model.Session;
 import com.music.trivia.server.demo.service.SessionService;
+import com.music.trivia.server.demo.service.JwtService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
+import java.util.Map;
+
 @RestController
 @CrossOrigin(origins = "http://localhost:3000")
 @RequestMapping("/api/sessions")
 public class SessionController {
+    private static final Logger logger = LoggerFactory.getLogger(SessionController.class);
     private final SessionService sessionService;
+    private final JwtService jwtService;
 
     @Autowired
-    public SessionController(SessionService sessionService) {
+    public SessionController(SessionService sessionService, JwtService jwtService) {
         this.sessionService = sessionService;
+        this.jwtService = jwtService;
     }
 
     @PostMapping("/create")
-    public ResponseEntity<String> createSession(@RequestParam String password) {
-        String sessionID = sessionService.createEmptySession(password);
-        return ResponseEntity.ok(sessionID);
+    public ResponseEntity<Map<String, String>> createSession(@RequestParam String userID, @RequestParam String password) {
+        logger.info("Received request to create session for user: {}", userID);
+        try {
+            String sessionID = sessionService.createEmptySession(password);
+            String token = jwtService.generateToken(userID, sessionID);
+            String refreshToken = jwtService.generateRefreshToken(userID, sessionID);
+
+            Map<String, String> response = new HashMap<>();
+            response.put("sessionID", sessionID);
+            response.put("token", token);
+            response.put("refreshToken", refreshToken);
+
+            logger.info("Session created successfully for user: {}, sessionID: {}", userID, sessionID);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            logger.error("Error creating session for user: {}", userID, e);
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @PostMapping("/join")
-    public ResponseEntity<String> joinSession(@RequestParam String sessionId, @RequestParam String userID, @RequestParam String password, @RequestParam String avatar) {
+    public ResponseEntity<Map<String, String>> joinSession(@RequestParam String sessionId, @RequestParam String userID, @RequestParam String password, @RequestParam String avatar) {
+        logger.info("Received request to join session: {} for user: {}", sessionId, userID);
         try {
             Session session = sessionService.joinSession(sessionId, userID, password, avatar, "Player");
-            return ResponseEntity.ok(userID);
-        } catch (UserAlreadyExistsException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+            String token = jwtService.generateToken(userID, sessionId);
+            String refreshToken = jwtService.generateRefreshToken(userID, sessionId);
+
+            Map<String, String> response = new HashMap<>();
+            response.put("userID", userID);
+            response.put("token", token);
+            response.put("refreshToken", refreshToken);
+
+            logger.info("User: {} successfully joined session: {}", userID, sessionId);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            logger.error("Error joining session: {} for user: {}", sessionId, userID, e);
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 
-    @PostMapping("/kick")
-    public ResponseEntity<String> kickUser(
-            @RequestParam String sessionId,
-            @RequestParam String userID,
-            @RequestParam String requestingUser) {
+    @PostMapping("/refresh-token")
+    public ResponseEntity<Map<String, String>> refreshToken(@RequestBody Map<String, String> request) {
+        String refreshToken = request.get("refreshToken");
+        logger.info("Received request to refresh token");
         try {
-            boolean isKicked = sessionService.kickUser(sessionId, userID, requestingUser);
-            if (isKicked) {
-                return ResponseEntity.ok(userID + " has been successfully kicked");
+            String userID = jwtService.extractUsername(refreshToken);
+            String sessionId = jwtService.extractSessionId(refreshToken);
+
+            if (userID != null && sessionId != null && jwtService.isTokenValid(refreshToken, userID, sessionId)) {
+                String newToken = jwtService.generateToken(userID, sessionId);
+                String newRefreshToken = jwtService.generateRefreshToken(userID, sessionId);
+
+                Map<String, String> response = new HashMap<>();
+                response.put("token", newToken);
+                response.put("refreshToken", newRefreshToken);
+
+                logger.info("Token refreshed successfully for user: {}, session: {}", userID, sessionId);
+                return ResponseEntity.ok(response);
             } else {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("You don't have permission to kick users");
+                logger.warn("Invalid refresh token received");
+                return ResponseEntity.badRequest().body(Map.of("error", "Invalid refresh token"));
             }
-        } catch (UserNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            logger.error("Error refreshing token", e);
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 
-    @PostMapping("/leave")
-    public ResponseEntity<String> leaveUser(
-            @RequestParam String sessionId,
-            @RequestParam String userID) {
-        try {
-            sessionService.leaveUser(sessionId, userID);
-            return ResponseEntity.ok(userID + " has successfully left");
-        } catch (UserNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
-        }
-    }
-
-    @GetMapping("/score")
-    public ResponseEntity<Integer> getUserScore(@RequestParam String sessionId, @RequestParam String userID) {
-        try {
-            int score = sessionService.getUserScore(sessionId, userID);
-            return ResponseEntity.ok(score);
-        } catch (UserNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
-        }
-    }
-
-    @PostMapping("/scoreUpdate")
-    public ResponseEntity<String> updateUserScore(@RequestParam String sessionId, @RequestParam String userID, @RequestParam int score) {
-        try {
-            sessionService.updateUserScore(sessionId, userID, score);
-            return ResponseEntity.ok(userID + "'s score has been updated successfully to " + score);
-        } catch (UserNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
-        }
-    }
 }

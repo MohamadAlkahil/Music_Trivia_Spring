@@ -34,6 +34,7 @@ public class TriviaService {
     }
 
     public List<TriviaQuestion> fetchMusicTrivia(int numberOfQuestions) {
+        logger.info("Fetching {} music trivia questions", numberOfQuestions);
         String url = "https://opentdb.com/api.php?amount=" + numberOfQuestions + "&category=12&type=multiple";
         String response = restTemplate.getForObject(url, String.class);
         List<TriviaQuestion> questions = new ArrayList<>();
@@ -41,6 +42,7 @@ public class TriviaService {
         try {
             JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.path("results");
+            logger.info("Received {} questions from API", results.size());
 
             for (JsonNode result : results) {
                 String question = StringEscapeUtils.unescapeHtml4(result.path("question").asText());
@@ -52,25 +54,56 @@ public class TriviaService {
                 questions.add(new TriviaQuestion(question, correctAnswer, incorrectAnswers));
             }
         } catch (Exception e) {
+            logger.error("Error parsing trivia API response", e);
             throw new RuntimeException("Error parsing trivia API response", e);
         }
 
+        logger.info("Successfully parsed {} questions", questions.size());
         return questions;
     }
 
     public void setTriviaQuestions(String sessionId, List<TriviaQuestion> questions) {
+        logger.info("Setting {} trivia questions for session {}", questions.size(), sessionId);
         Session session = sessionService.getSession(sessionId);
         session.setTriviaQuestions(questions);
         session.setCurrentQuestionIndex(0);
         session.resetAnsweredUsers();
-        logger.info("Set {} trivia questions for session {}", questions.size(), sessionId);
+        logger.info("Trivia questions set successfully for session {}", sessionId);
     }
 
     public TriviaQuestion getCurrentQuestion(String sessionId) {
+        logger.info("Getting current question for session {}", sessionId);
         Session session = sessionService.getSession(sessionId);
         TriviaQuestion question = session.getCurrentQuestion();
-        logger.info("Retrieved current question for session {}", sessionId);
+        if (question != null) {
+            logger.info("Retrieved current question for session {}: {}", sessionId, question.getQuestion());
+        } else {
+            logger.warn("No current question available for session {}", sessionId);
+        }
         return question;
+    }
+
+    public void startGame(String sessionId, int numberOfQuestions) {
+        List<TriviaQuestion> questions = fetchMusicTrivia(numberOfQuestions);
+        setTriviaQuestions(sessionId, questions);
+        logger.info("Started new game for session {} with {} questions", sessionId, numberOfQuestions);
+        sendNextQuestion(sessionId);
+    }
+
+    public void sendNextQuestion(String sessionId) {
+        logger.info("Preparing to send next question for session {}", sessionId);
+        Session session = sessionService.getSession(sessionId);
+        TriviaQuestion question = session.getCurrentQuestion();
+        if (question == null) {
+            logger.warn("No question available for session: {}", sessionId);
+            return;
+        }
+        logger.info("Sending next question to session: {}", sessionId);
+        Map<String, Object> message = new HashMap<>();
+        message.put("type", "NEW_QUESTION");
+        message.put("data", question);
+        messagingTemplate.convertAndSend("/topic/game/" + sessionId, message);
+        logger.info("Sent NEW_QUESTION message for session {}: {}", sessionId, message);
     }
 
     public boolean submitAnswer(String sessionId, String userId, String answer) {
@@ -85,6 +118,8 @@ public class TriviaService {
             logger.info("User {} answered incorrectly in session {}", userId, sessionId);
         }
         session.addAnsweredUser(userId);
+
+
         return isCorrect;
     }
 
@@ -93,19 +128,10 @@ public class TriviaService {
         return session.isAllUsersAnswered();
     }
 
-
-
     public boolean isGameOver(String sessionId) {
         Session session = sessionService.getSession(sessionId);
         return session.isGameOver();
     }
-
-    public void startGame(String sessionId, int numberOfQuestions) {
-        List<TriviaQuestion> questions = fetchMusicTrivia(numberOfQuestions);
-        setTriviaQuestions(sessionId, questions);
-        logger.info("Started new game for session {} with {} questions", sessionId, numberOfQuestions);
-    }
-
 
     public Map<String, Integer> getScores(String sessionId) {
         Session session = sessionService.getSession(sessionId);
@@ -153,7 +179,6 @@ public class TriviaService {
                 sessionTimers.remove(sessionId);
                 if (!isGameOver(sessionId)) {
                     moveToNextQuestion(sessionId);
-                    startTimer(sessionId);
                     sendNextQuestion(sessionId);
                 } else {
                     endGame(sessionId);
@@ -168,13 +193,4 @@ public class TriviaService {
         session.resetAnsweredUsers();
         startTimer(sessionId);
     }
-
-    private void sendNextQuestion(String sessionId) {
-        TriviaQuestion question = getCurrentQuestion(sessionId);
-        messagingTemplate.convertAndSend("/topic/game/" + sessionId, Map.of(
-                "type", "NEW_QUESTION",
-                "data", question
-        ));
-    }
-
 }

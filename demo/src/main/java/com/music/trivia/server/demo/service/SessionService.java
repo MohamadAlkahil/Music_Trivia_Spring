@@ -8,6 +8,7 @@ import com.music.trivia.server.demo.model.User;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.context.annotation.Lazy;
 
 import java.util.Map;
 import org.slf4j.Logger;
@@ -21,7 +22,7 @@ public class SessionService {
     private final SimpMessagingTemplate messagingTemplate;
 
     @Autowired
-    public SessionService(SessionStorage sessionStorage, SimpMessagingTemplate messagingTemplate) {
+    public SessionService(SessionStorage sessionStorage, @Lazy SimpMessagingTemplate messagingTemplate) {
         this.sessionStorage = sessionStorage;
         this.messagingTemplate = messagingTemplate;
     }
@@ -189,6 +190,19 @@ public class SessionService {
         } else {
             logger.warn("Non-creator {} attempted to end session {}", creatorId, sessionId);
             throw new IllegalArgumentException("Only the creator can end the session");
+        }
+    }
+
+    public boolean isUserInSession(String sessionId, String userID) {
+        logger.info("Checking if user {} is in session {}", userID, sessionId);
+        try {
+            Session session = sessionStorage.getSession(sessionId);
+            boolean isInSession = session.getUser(userID) != null;
+            logger.info("User {} {} in session {}", userID, isInSession ? "is" : "is not", sessionId);
+            return isInSession;
+        } catch (IllegalArgumentException e) {
+            logger.warn("Session {} not found when checking for user {}", sessionId, userID);
+            return false;
         }
     }
 }

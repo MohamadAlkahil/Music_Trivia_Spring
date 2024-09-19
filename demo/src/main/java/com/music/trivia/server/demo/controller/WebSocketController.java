@@ -10,6 +10,7 @@ import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
+import com.music.trivia.server.demo.annotation.WebSocketAuthenticated;
 
 import java.util.Map;
 import java.util.HashMap;
@@ -32,6 +33,7 @@ public class WebSocketController {
         this.messagingTemplate = messagingTemplate;
     }
 
+    @WebSocketAuthenticated
     @MessageMapping("/userJoin")
     public void handleUserJoin(@Payload Map<String, Object> message) {
         logger.info("Received userJoin message: {}", message);
@@ -77,6 +79,7 @@ public class WebSocketController {
         }
     }
 
+    @WebSocketAuthenticated
     @MessageMapping("/userLeave")
     public void handleUserLeave(@Payload Map<String, Object> message) {
         logger.info("Received userLeave message: {}", message);
@@ -112,6 +115,7 @@ public class WebSocketController {
         }
     }
 
+    @WebSocketAuthenticated
     @MessageMapping("/userUpdate")
     public void handleUserUpdate(@Payload Map<String, Object> message) {
         logger.info("Received userUpdate message: {}", message);
@@ -133,27 +137,37 @@ public class WebSocketController {
     }
 
     @MessageMapping("/startGame")
+    @WebSocketAuthenticated
     public void handleStartGame(@Payload Map<String, Object> message) {
         String sessionId = (String) message.get("sessionId");
         String userId = (String) message.get("userId");
+        logger.info("Received start game request for session: {} from user: {}", sessionId, userId);
 
         Session session = sessionService.getSession(sessionId);
 
         if (session.isCreator(userId)) {
-            // Start the game with 10 questions
+            logger.info("Starting game for session: {}", sessionId);
             triviaService.startGame(sessionId, 10);
-
-            // Broadcast game start to all users in the session
-            messagingTemplate.convertAndSend("/topic/game/" + sessionId, Map.of(
-                    "type", "GAME_START",
-                    "data", Map.of("redirect", "/trivia")
-            ));
-
-            // Send first question
-            sendNextQuestion(sessionId);
+        } else {
+            logger.warn("Non-creator user {} attempted to start game for session {}", userId, sessionId);
         }
     }
 
+    private void sendNextQuestion(String sessionId) {
+        TriviaQuestion question = triviaService.getCurrentQuestion(sessionId);
+        if (question == null) {
+            logger.warn("No question available for session: {}", sessionId);
+            return;
+        }
+        logger.info("Sending next question to session: {}", sessionId);
+        Map<String, Object> message = new HashMap<>();
+        message.put("type", "NEW_QUESTION");
+        message.put("data", question);
+        messagingTemplate.convertAndSend("/topic/game/" + sessionId, message);
+        logger.info("Sent NEW_QUESTION message: {}", message);
+    }
+
+    @WebSocketAuthenticated
     @MessageMapping("/endGame")
     public void handleEndGame(@Payload Map<String, Object> message) {
         String sessionId = (String) message.get("sessionId");
@@ -189,17 +203,29 @@ public class WebSocketController {
         }
     }
 
+    @WebSocketAuthenticated
     @MessageMapping("/getCurrentQuestion")
     public void handleGetCurrentQuestion(@Payload Map<String, Object> message) {
         String sessionId = (String) message.get("sessionId");
+        logger.info("Received getCurrentQuestion request for session: {}", sessionId);
         TriviaQuestion currentQuestion = triviaService.getCurrentQuestion(sessionId);
-        messagingTemplate.convertAndSend("/topic/game/" + sessionId, Map.of(
-                "type", "NEW_QUESTION",
-                "data", currentQuestion
-        ));
+        if (currentQuestion != null) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("type", "NEW_QUESTION");
+            response.put("data", currentQuestion);
+            messagingTemplate.convertAndSend("/topic/game/" + sessionId, response);
+            logger.info("Sent current question to session: {}", sessionId);
+        } else {
+            logger.warn("No current question available for session: {}", sessionId);
+            messagingTemplate.convertAndSend("/topic/game/" + sessionId, Map.of(
+                    "type", "ERROR",
+                    "data", Map.of("message", "No question available")
+            ));
+        }
     }
 
     @MessageMapping("/submitAnswer")
+    @WebSocketAuthenticated
     public void handleSubmitAnswer(@Payload Map<String, Object> message) {
         String sessionId = (String) message.get("sessionId");
         String userId = (String) message.get("userId");
@@ -244,8 +270,10 @@ public class WebSocketController {
                 }
             }).start();
         }
+        logger.info("Received answer submission from user {} in session {}", userId, sessionId);
     }
 
+    @WebSocketAuthenticated
     @MessageMapping("/nextQuestion")
     public void handleNextQuestion(@Payload Map<String, Object> message) {
         String sessionId = (String) message.get("sessionId");
@@ -262,14 +290,8 @@ public class WebSocketController {
         }
     }
 
-    private void sendNextQuestion(String sessionId) {
-        TriviaQuestion question = triviaService.getCurrentQuestion(sessionId);
-        messagingTemplate.convertAndSend("/topic/game/" + sessionId, Map.of(
-                "type", "NEW_QUESTION",
-                "data", question
-        ));
-    }
 
+    @WebSocketAuthenticated
     @MessageMapping("/removeUser")
     public void handleRemoveUser(@Payload Map<String, Object> message) {
         String sessionId = (String) message.get("sessionId");
@@ -284,6 +306,7 @@ public class WebSocketController {
         }
     }
 
+    @WebSocketAuthenticated
     @MessageMapping("/creatorLeave")
     public void handleCreatorLeave(@Payload Map<String, Object> message) {
         String sessionId = (String) message.get("sessionId");
