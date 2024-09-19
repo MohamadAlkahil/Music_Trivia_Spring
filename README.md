@@ -9,7 +9,7 @@ This project is a real-time multiplayer Music Trivia game built with a Spring Bo
 link here
 
 ## Architecture
-picture here
+![GitHub Logo](https://github.com/MohamadAlkahil/Music_Trivia_Spring/blob/main/architecture%20diagram.png)
 
 
 ## Key Features
