@@ -4,9 +4,8 @@
 
 This project is a real-time multiplayer Music Trivia game built with a Spring Boot backend and a React frontend. 
 
-## Demo
-
-[link here](https://www.youtube.com/watch?v=RmIhncpdcmc)
+## Video Demo
+https://www.youtube.com/watch?v=RmIhncpdcmc
 
 ## Key Features
 
