@@ -116,7 +116,7 @@ sequenceDiagram
 
 ### 4.2 State Management
 
-The application uses React's built-in state management (useState and useEffect hooks) for local component state. For more complex state management, it relies on prop drilling and lifting state up to parent components.
+The application uses React's built-in state management (useState and useEffect hooks) for local component state.
 
 ### 4.3 WebSocket Integration
 
