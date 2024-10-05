@@ -27,14 +27,6 @@ The application follows a client-server architecture with the following main com
 
 ### High-Level Architecture Diagram
 
-```mermaid
-graph TD
-    A[React Frontend] -->|HTTP| B[Spring Boot Backend]
-    A -->|WebSocket| B
-    B -->|In-memory| C[SessionStorage]
-    B -->|HTTP| D[OpenTriviaDB API]
-```
-
 ![GitHub Logo](https://github.com/MohamadAlkahil/Music_Trivia_Spring/blob/main/architecture%20diagram.png)
 
 ## 3. Backend Design
