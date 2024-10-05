@@ -148,13 +148,8 @@ graph TD
 3. **Input Validation**: Implemented on both frontend and backend
 4. **WebSocket Authorization**: Custom handler to validate WebSocket connections
 
-## 7. Scalability and Performance
 
-1. **In-Memory Storage**: Currently uses in-memory storage, which may need to be replaced with a distributed cache or database for horizontal scaling
-2. **WebSocket Connections**: May require a separate WebSocket server or clustering for handling a large number of concurrent connections
-3. **Question Fetching**: Currently fetches questions in real-time, which may be optimized by pre-fetching and caching questions
-
-## 8. Future Improvements
+## 7. Future Improvements
 
 1. Implement persistent storage for user accounts and game history
 2. Add more game modes and question types
